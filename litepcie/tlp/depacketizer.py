@@ -436,7 +436,9 @@ class LitePCIeTLPDepacketizer(LiteXModule):
                 cmp_source.last.eq(tlp_cmp.last),
                 cmp_source.len.eq(tlp_cmp.length),
                 cmp_source.byte_count.eq(tlp_cmp.byte_count),
-                cmp_source.end.eq(tlp_cmp.length == (tlp_cmp.byte_count[2:])),
+                # End of the request's completion: the remaining byte count is covered by this
+                # TLP, or it carries no data at all (Cpl: config write / error completion).
+                cmp_source.end.eq((tlp_cmp.length == (tlp_cmp.byte_count[2:])) | ~tlp_cmp.fmt[1]),
                 cmp_source.adr.eq(tlp_cmp.lower_address),
                 cmp_source.req_id.eq(tlp_cmp.requester_id),
                 cmp_source.cmp_id.eq(tlp_cmp.completer_id),
