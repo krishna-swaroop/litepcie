@@ -73,13 +73,23 @@ class LitePCIeTLPController(LiteXModule):
             req_queue.reset.eq(self.ctrl_rst),
             req_fsm.reset.eq(self.ctrl_rst),
         ]
+        # Memory Writes are posted: sent directly, with no tag and no completion. Configuration
+        # Writes are non-posted (the completer returns a Cpl), so they take the read path: they
+        # get a tag and a req_queue entry, and their Cpl is matched and retired like a read's.
+        # (Sending them as posted made the Cpl come back with the posted tag and be dropped, so
+        # the requester only ever finished a config write through its timeout.)
+        posted_write = Signal()
+        if with_configuration:
+            self.comb += posted_write.eq(req_sink.we & ~req_sink.is_cfg)
+        else:
+            self.comb += posted_write.eq(req_sink.we)
         req_fsm.act("WAIT-REQ",
             # Wait for a TLP Request...
             If(req_sink.valid & req_sink.first,
-                # TLP Write: We can send the request directly.
-                If(req_sink.we,
+                # TLP (Memory) Write: We can send the request directly.
+                If(posted_write,
                    NextState("SEND-WRITE-REQ")
-                # TLP Read:  We can send the request when one tag available and space in req_queue.
+                # TLP Read / Config Write: We can send the request when one tag available and space in req_queue.
                 ).Elif(tag_queue.source.valid & req_queue.sink.ready,
                    NextState("SEND-READ-REQ")
                 )
